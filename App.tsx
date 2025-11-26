@@ -1,8 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { PLATFORMS, CURRENCIES, Icons } from './constants';
+import { CURRENCIES, Icons } from './constants';
 import { SearchState } from './types';
 import { analyzeItemWithGemini, searchItemPrices, getAutocompleteSuggestions } from './services/geminiService';
-import PlatformCard from './components/PlatformCard';
 import AIInsight from './components/AIInsight';
 
 export default function App() {
@@ -27,7 +26,6 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(async () => {
       // CRITICAL FIX: Only run logic if the input is currently focused.
-      // This prevents the menu from popping up if the user has already clicked away.
       if (document.activeElement !== inputRef.current) {
          return;
       }
@@ -38,7 +36,6 @@ export default function App() {
           const results = await getAutocompleteSuggestions(state.query);
           
           // CRITICAL FIX: Check focus AGAIN after the async await.
-          // If user clicked away during the API call, do not show suggestions.
           if (document.activeElement !== inputRef.current) {
              setShowSuggestions(false);
              return;
@@ -135,21 +132,6 @@ export default function App() {
     handleSearch(undefined, suggestion);
   };
 
-  const handleOpenAll = () => {
-    if (!state.query) return;
-    
-    let opened = 0;
-    PLATFORMS.forEach((platform) => {
-        const url = platform.urlTemplate(state.query);
-        const win = window.open(url, '_blank');
-        if (win) opened++;
-    });
-
-    if (opened === 0) {
-        alert("Popups were blocked. Please allow popups for this site to open all searches at once.");
-    }
-  };
-
   const updateQuery = (newQuery: string) => {
       setState(prev => ({...prev, query: newQuery }));
   };
@@ -159,27 +141,34 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-200 selection:bg-indigo-500/30 font-sans">
+    <div className="min-h-screen bg-gray-950 text-gray-200 selection:bg-indigo-500/30 font-sans pb-10 relative overflow-hidden">
       
+      {/* Background Ambience Mesh */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-indigo-900/20 rounded-full blur-[120px] mix-blend-screen animate-pulse-slow"></div>
+         <div className="absolute top-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-900/10 rounded-full blur-[100px] mix-blend-screen"></div>
+         <div className="absolute bottom-[0%] left-[20%] w-[60%] h-[40%] bg-emerald-900/10 rounded-full blur-[130px] mix-blend-screen"></div>
+      </div>
+
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-gray-800 bg-gray-950/80 backdrop-blur-md">
-        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-30 border-b border-white/5 bg-gray-950/80 backdrop-blur-xl">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center gap-4">
             
             {/* Logo */}
             <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-500/20">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-500/30 ring-1 ring-white/10">
                 <Icons.Search />
               </div>
-              <h1 className="text-lg font-bold text-white tracking-tight">Price<span className="text-indigo-400">Compass</span></h1>
+              <h1 className="text-xl font-bold text-white tracking-tight">Price<span className="text-indigo-400">Compass</span></h1>
             </div>
 
             {/* Central Search Bar */}
             <div className="flex-1 w-full max-w-2xl mx-auto relative z-40" ref={wrapperRef}>
               <form onSubmit={(e) => handleSearch(e)} className="relative group w-full">
-                <div className="relative flex items-center rounded-xl bg-gray-900 shadow-sm border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                  <div className="pl-4 text-gray-500">
-                    <Icons.Search width="18" height="18" />
+                <div className="relative flex items-center rounded-2xl bg-gray-900/80 shadow-inner border border-white/10 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                  <div className="pl-4 text-gray-400">
+                    <Icons.Search width="20" height="20" />
                   </div>
                   <input
                     ref={inputRef}
@@ -191,14 +180,14 @@ export default function App() {
                        // If user clears input, hide suggestions immediately
                        if (val.length < 3) setShowSuggestions(false);
                     }}
-                    placeholder="Search game, console, or accessory..."
-                    className="w-full bg-transparent px-3 py-2.5 text-base text-white placeholder-gray-500 focus:outline-none"
+                    placeholder="Search game title, console, or edition..."
+                    className="w-full bg-transparent px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none"
                     autoComplete="off"
                   />
                   <button
                     type="submit"
                     disabled={state.isSearching || !state.query}
-                    className="mr-1.5 rounded-lg bg-indigo-600 px-5 py-1.5 text-sm font-semibold text-white transition-all hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/25 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
+                    className="mr-1.5 rounded-xl bg-indigo-600 px-6 py-2 text-sm font-bold text-white transition-all hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed border border-white/10"
                   >
                     {state.isSearching ? (
                        <span className="flex items-center gap-2">
@@ -212,8 +201,8 @@ export default function App() {
 
                 {/* Autocomplete Dropdown */}
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                    <div className="px-3 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider bg-gray-950/50">Suggestions</div>
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50 ring-1 ring-black/20">
+                    <div className="px-4 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-white/5">Suggestions</div>
                     <ul>
                       {suggestions.map((s, i) => (
                         <li 
@@ -223,13 +212,13 @@ export default function App() {
                              e.preventDefault(); 
                              handleSuggestionClick(s);
                           }}
-                          className="px-4 py-3 hover:bg-indigo-600/10 hover:text-indigo-300 cursor-pointer text-sm text-gray-300 border-b border-gray-800/50 last:border-0 flex items-center justify-between group transition-colors"
+                          className="px-4 py-3.5 hover:bg-indigo-500/20 hover:text-indigo-200 cursor-pointer text-sm text-gray-300 border-b border-white/5 last:border-0 flex items-center justify-between group transition-colors"
                         >
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 font-medium">
                              {s}
                           </span>
-                          <span className="opacity-0 group-hover:opacity-100 text-indigo-500">
-                             <Icons.ExternalLink width="12" height="12"/>
+                          <span className="opacity-0 group-hover:opacity-100 text-indigo-400">
+                             <Icons.ExternalLink width="14" height="14"/>
                           </span>
                         </li>
                       ))}
@@ -241,24 +230,13 @@ export default function App() {
 
             {/* Controls */}
             <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
-               {state.query && (
-                <button 
-                  onClick={handleOpenAll}
-                  className="hidden md:flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white transition-colors border border-gray-800 rounded-lg px-3 py-2 hover:bg-gray-800 hover:border-gray-700"
-                  title="Open all sites in new tabs"
-                >
-                  <Icons.ExternalLink width="14" height="14" />
-                  Open All
-                </button>
-               )}
-              
               <div className="relative">
-                <div className="flex items-center gap-2 rounded-xl bg-gray-900 border border-gray-800 px-3 py-2 text-sm text-gray-300 hover:border-gray-700 transition-colors">
-                  <span className="text-gray-500"><Icons.Globe width="16" height="16" /></span>
+                <div className="flex items-center gap-2 rounded-xl bg-gray-900/80 border border-white/10 px-4 py-2.5 text-sm text-gray-300 hover:border-gray-600 transition-colors shadow-sm">
+                  <span className="text-gray-400"><Icons.Globe width="16" height="16" /></span>
                   <select 
                     value={state.currency}
                     onChange={(e) => handleCurrencyChange(e.target.value)}
-                    className="appearance-none bg-transparent font-medium focus:outline-none cursor-pointer pr-1 text-xs sm:text-sm"
+                    className="appearance-none bg-transparent font-bold focus:outline-none cursor-pointer pr-1 text-xs sm:text-sm text-white"
                   >
                     {CURRENCIES.map(curr => (
                       <option key={curr.code} value={curr.code} className="bg-gray-900 text-gray-200">
@@ -274,45 +252,29 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 relative z-10">
         
         {/* Error Message */}
         {state.error && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 flex items-center gap-3 text-red-400 text-sm">
-             <div className="shrink-0 text-red-500">⚠</div>
-             {state.error}
+          <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-5 flex items-center gap-4 text-red-300 text-sm backdrop-blur-md">
+             <div className="shrink-0 p-2 rounded-full bg-red-500/20 text-red-500 font-bold">!</div>
+             <div className="font-medium">{state.error}</div>
           </div>
         )}
 
-        {/* AI Insight & Prices Section */}
+        {/* Main Content */}
         <AIInsight 
           analysis={state.analysis} 
           priceInsight={state.priceInsight}
           isLoading={state.isSearching} 
           onApplyTerm={updateQuery} 
+          currentQuery={state.query} // Pass query for direct links
         />
-
-        {/* Platforms Grid - Direct Access */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 px-1">
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Direct Search</h3>
-            <div className="h-px bg-gray-800 flex-grow"></div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {PLATFORMS.map((platform) => (
-              <PlatformCard 
-                key={platform.id} 
-                platform={platform} 
-                query={state.query} 
-              />
-            ))}
-          </div>
-        </div>
         
       </main>
 
-      <footer className="mt-12 py-6 text-center text-xs text-gray-600 border-t border-gray-900">
-        <p>© {new Date().getFullYear()} PriceCompass. Real-time data powered by Gemini.</p>
+      <footer className="mt-12 py-8 text-center border-t border-white/5 relative z-10">
+        <p className="text-xs text-gray-500 font-medium">© {new Date().getFullYear()} PriceCompass. Real-time intelligence powered by Google Gemini.</p>
       </footer>
     </div>
   );

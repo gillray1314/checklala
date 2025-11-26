@@ -39,22 +39,17 @@ export const getAutocompleteSuggestions = async (partialQuery: string): Promise<
   if (!partialQuery || partialQuery.length < 2) return [];
 
   try {
+    // Keep Flash-Lite for Autocomplete (Needs speed, low complexity)
     const prompt = `
-      You are an autocomplete engine for a video game price tracker.
-      User input: "${partialQuery}"
+      Task: Autocomplete video game titles.
+      Input: "${partialQuery}"
+      Output: JSON Array of 5 strings. No markdown.
       
-      Task: Return a JSON Array of 5 most likely specific video game titles or console names the user is looking for.
-      - Keep them concise.
-      - If the input implies a specific region (e.g. "jp", "asia"), include that context.
-      
-      Example Input: "poke"
-      Example Output: ["Pokemon Red", "Pokemon Emerald", "Pokemon SoulSilver", "Pokemon Switch Console"]
-
-      OUTPUT: Raw JSON Array of strings only.
+      Example: "poke" -> ["Pokemon Red", "Pokemon Emerald", "Pokemon Switch", "Pokemon Cards", "Pokemon Plush"]
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-lite-latest", 
       contents: prompt,
     });
 
@@ -69,50 +64,38 @@ export const getAutocompleteSuggestions = async (partialQuery: string): Promise<
 
 export const analyzeItemWithGemini = async (query: string, currency: string): Promise<ItemAnalysis | null> => {
   try {
+    // UPGRADE: Use Gemini 3 Pro Preview for maximum reasoning capabilities on complex text tasks
     const prompt = `
-      Analyze the item/game: "${query}".
-      
+      Analyze item: "${query}".
       Tasks:
-      1. Brief description & category.
-      2. Estimate value in ${currency}.
-      3. 3 Search keywords.
-      4. LANGUAGE & VERSION CHECK (Crucial):
-         Find supported languages (Audio/Text) for these 3 specific versions. 
-         Focus on whether they support Chinese or English.
-         
-         - Japan Version (JP): Search on nintendo.co.jp or playstation.com/ja-jp
-         - USA/Global Version (US): Search on nintendo.com or playstation.com
-         - Asia Version (ASI): Search on nintendo.com.hk, playstation.com/en-hk, or play-asia.com
+      1. Identify exact Name, Category, and a short Description.
+      2. Estimate Market Value in ${currency} strictly based on search results.
+      3. Generate 3 smart Search Keywords.
+      4. Research Language Support for JP, US, and ASIA versions.
       
-      OUTPUT FORMAT (Raw JSON only):
+      CRITICAL - SOURCE OF TRUTH:
+      - You MUST use the 'googleSearch' tool.
+      - For Language Support, ONLY trust official sources: nintendo.co.jp, playstation.com, nintendo.com.hk.
+      - Do NOT use wikis or reddit.
+      - "sourceUrl" MUST be the direct link to the specific game/product page found in search.
+      
+      Output JSON ONLY. No markdown.
       {
-        "name": "Product Name",
-        "category": "Category",
-        "description": "Description...",
-        "estimatedValue": "${currency} XX - ${currency} XX",
-        "searchTips": ["Keyword1", "Keyword2", "Keyword3"],
+        "name": "Full Exact Name",
+        "category": "Console/Game/Accessory",
+        "description": "Short accurate description (max 20 words).",
+        "estimatedValue": "${currency} XX",
+        "searchTips": ["Tag1", "Tag2"],
         "versions": [
-          { 
-            "region": "JP", 
-            "languages": "Japanese Only (or Japanese, English if supported)", 
-            "sourceUrl": "URL found for JP version" 
-          },
-          { 
-            "region": "US", 
-            "languages": "English, French, Spanish...", 
-            "sourceUrl": "URL found for US version" 
-          },
-          { 
-            "region": "ASIA", 
-            "languages": "Traditional Chinese, English...", 
-            "sourceUrl": "URL found for Asia version" 
-          }
+          { "region": "JP", "languages": "Supported Languages", "sourceUrl": "https://www.nintendo.co.jp/..." },
+          { "region": "US", "languages": "Supported Languages", "sourceUrl": "https://www.nintendo.com/..." },
+          { "region": "ASIA", "languages": "Supported Languages", "sourceUrl": "https://..." }
         ]
       }
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-pro-preview", // Changed from 2.5-flash to 3-pro for better accuracy
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -155,33 +138,37 @@ export const analyzeItemWithGemini = async (query: string, currency: string): Pr
 
 export const searchItemPrices = async (query: string, currency: string): Promise<PriceInsight | null> => {
   try {
+    // UPGRADE: Use Gemini 3 Pro Preview for pricing.
+    // It is much better at reading search snippets and avoiding hallucination.
     const prompt = `
-      Find current market prices for "${query}" on these platforms: 
-      1. PriceCharting
-      2. eBay
-      3. Shopee Malaysia
-      4. CeX (Webuy) Malaysia
+      Task: Find REAL-TIME market prices for "${query}" in ${currency}.
       
-      Instructions:
-      - CONVERT ALL PRICES to ${currency}.
-      - Return a structured list of prices found.
-      - If a platform has no data/listings, set status to "Not found".
-      - Provide a very brief overview text summarizing the market status.
+      Strict Rules:
+      1. USE Google Search. 
+      2. If the search result does not explicitly show a price for this item, DO NOT INVENT ONE.
+      3. If no price is found for a platform, set status to "Check Website" and price to "---".
+      4. Do not estimate conversions unless the search result provides them.
+      
+      Targets:
+      1. PriceCharting (Look for 'loose', 'cib', or 'new' price).
+      2. eBay (Look for 'buy it now' or recent sold).
+      3. Shopee Malaysia (Look for actual listing prices).
+      4. CeX / Webuy Malaysia (Look for 'WeSell' price).
 
-      OUTPUT FORMAT:
-      Return ONLY a raw JSON string (no markdown) with this structure:
+      Output JSON ONLY. No markdown.
       {
         "prices": [
-          { "platform": "PriceCharting", "price": "${currency} 50", "status": "Available" },
-          { "platform": "eBay", "price": "${currency} 45 - 60", "status": "Many listings" },
-          { "platform": "Shopee", "price": "Not found", "status": "Out of stock" }
+          { "platform": "PriceCharting", "price": "${currency} XX", "status": "Market Price" },
+          { "platform": "eBay", "price": "${currency} XX", "status": "Avg Listed" },
+          { "platform": "Shopee Malaysia", "price": "${currency} XX", "status": "Low-High" },
+          { "platform": "CeX / Webuy MY", "price": "${currency} XX", "status": "WeSell Price" }
         ],
-        "overview": "Brief summary of pricing trends..."
+        "overview": "One sentence factual summary. If data is missing, say so."
       }
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-pro-preview", // Changed from 2.5-flash to 3-pro for better accuracy
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
