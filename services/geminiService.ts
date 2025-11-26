@@ -3,31 +3,111 @@ import { ItemAnalysis, PriceInsight, WebSource } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Helper to extract JSON from mixed text
+function extractJSON(text: string): any {
+  try {
+    // 1. Try direct parse
+    return JSON.parse(text);
+  } catch (e) {
+    // 2. Try cleaning markdown code blocks
+    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    try {
+      return JSON.parse(cleanText);
+    } catch (e2) {
+      // 3. Regex search for the first valid JSON object structure
+      const match = cleanText.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          return JSON.parse(match[0]);
+        } catch (e3) {
+          console.warn("Regex found potential JSON but parse failed", e3);
+        }
+      }
+      // 4. Regex search for array structure (for autocomplete)
+      const arrayMatch = cleanText.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+         try {
+            return JSON.parse(arrayMatch[0]);
+         } catch (e4) {}
+      }
+    }
+    throw new Error("Could not parse JSON response");
+  }
+}
+
+export const getAutocompleteSuggestions = async (partialQuery: string): Promise<string[]> => {
+  if (!partialQuery || partialQuery.length < 2) return [];
+
+  try {
+    const prompt = `
+      You are an autocomplete engine for a video game price tracker.
+      User input: "${partialQuery}"
+      
+      Task: Return a JSON Array of 5 most likely specific video game titles or console names the user is looking for.
+      - Keep them concise.
+      - If the input implies a specific region (e.g. "jp", "asia"), include that context.
+      
+      Example Input: "poke"
+      Example Output: ["Pokemon Red", "Pokemon Emerald", "Pokemon SoulSilver", "Pokemon Switch Console"]
+
+      OUTPUT: Raw JSON Array of strings only.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    const text = response.text || "[]";
+    const json = extractJSON(text);
+    return Array.isArray(json) ? json.slice(0, 5) : [];
+  } catch (error) {
+    // Fail silently for autocomplete to avoid disrupting UX
+    return [];
+  }
+};
+
 export const analyzeItemWithGemini = async (query: string, currency: string): Promise<ItemAnalysis | null> => {
   try {
-    // We must use googleSearch to find accurate language info from official sites.
-    // NOTE: When tools (googleSearch) are used, responseMimeType: 'application/json' is NOT supported by the SDK/API in the same way.
-    // We must ask for a plain string JSON and parse it manually.
     const prompt = `
-      Analyze the item/product named: "${query}".
+      Analyze the item/game: "${query}".
       
       Tasks:
-      1. Provide a brief description and identify its category.
-      2. Estimate a rough global value range in ${currency} for a used condition (e.g. "MYR 100 - MYR 200").
-      3. Provide 3 specific search keywords.
-      4. LANGUAGE CHECK: Use Google Search to find the supported text/audio languages for this game/product. 
-         - PRIORITIZE searching on "nintendo.co.jp" or "playstation.com/ja-jp" or official developer sites.
-         - List the languages clearly (e.g., "Japanese, English, Chinese").
+      1. Brief description & category.
+      2. Estimate value in ${currency}.
+      3. 3 Search keywords.
+      4. LANGUAGE & VERSION CHECK (Crucial):
+         Find supported languages (Audio/Text) for these 3 specific versions. 
+         Focus on whether they support Chinese or English.
+         
+         - Japan Version (JP): Search on nintendo.co.jp or playstation.com/ja-jp
+         - USA/Global Version (US): Search on nintendo.com or playstation.com
+         - Asia Version (ASI): Search on nintendo.com.hk, playstation.com/en-hk, or play-asia.com
       
-      OUTPUT FORMAT:
-      Return ONLY a raw JSON string (no markdown formatting like \`\`\`json) with the following structure:
+      OUTPUT FORMAT (Raw JSON only):
       {
         "name": "Product Name",
         "category": "Category",
         "description": "Description...",
         "estimatedValue": "${currency} XX - ${currency} XX",
         "searchTips": ["Keyword1", "Keyword2", "Keyword3"],
-        "languages": "Japanese, English..."
+        "versions": [
+          { 
+            "region": "JP", 
+            "languages": "Japanese Only (or Japanese, English if supported)", 
+            "sourceUrl": "URL found for JP version" 
+          },
+          { 
+            "region": "US", 
+            "languages": "English, French, Spanish...", 
+            "sourceUrl": "URL found for US version" 
+          },
+          { 
+            "region": "ASIA", 
+            "languages": "Traditional Chinese, English...", 
+            "sourceUrl": "URL found for Asia version" 
+          }
+        ]
       }
     `;
 
@@ -36,22 +116,24 @@ export const analyzeItemWithGemini = async (query: string, currency: string): Pr
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        // responseMimeType cannot be used with tools for now in this context without conflicts, 
-        // so we rely on the prompt to enforce JSON structure.
       }
     });
 
     const text = response.text || "{}";
     
-    // Clean up potential markdown code blocks if the model includes them
-    const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
     let data: ItemAnalysis;
     try {
-      data = JSON.parse(jsonString);
+      data = extractJSON(text);
     } catch (e) {
-      console.warn("Failed to parse JSON directly, attempting fallback", e);
-      return null;
+      console.warn("JSON extraction failed:", e);
+      return {
+        name: query,
+        category: "Unknown",
+        description: "Could not analyze details automatically.",
+        estimatedValue: "N/A",
+        searchTips: [query],
+        versions: []
+      };
     }
 
     // Extract grounding chunks (sources) for the analysis
@@ -73,23 +155,51 @@ export const analyzeItemWithGemini = async (query: string, currency: string): Pr
 
 export const searchItemPrices = async (query: string, currency: string): Promise<PriceInsight | null> => {
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Find the current market price for "${query}" on these specific platforms: 
+    const prompt = `
+      Find current market prices for "${query}" on these platforms: 
       1. PriceCharting
       2. eBay
       3. Shopee Malaysia
       4. CeX (Webuy) Malaysia
       
       Instructions:
-      - Summarize the findings in a concise list.
-      - CONVERT ALL PRICES to ${currency} (approximate exchange rate is fine).
-      - If a specific platform has no recent data or the item isn't found there, explicitly state "Not found".
-      - Keep it brief and focused on price numbers.`,
+      - CONVERT ALL PRICES to ${currency}.
+      - Return a structured list of prices found.
+      - If a platform has no data/listings, set status to "Not found".
+      - Provide a very brief overview text summarizing the market status.
+
+      OUTPUT FORMAT:
+      Return ONLY a raw JSON string (no markdown) with this structure:
+      {
+        "prices": [
+          { "platform": "PriceCharting", "price": "${currency} 50", "status": "Available" },
+          { "platform": "eBay", "price": "${currency} 45 - 60", "status": "Many listings" },
+          { "platform": "Shopee", "price": "Not found", "status": "Out of stock" }
+        ],
+        "overview": "Brief summary of pricing trends..."
+      }
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
       }
     });
+
+    const text = response.text || "{}";
+    let data;
+    
+    try {
+      data = extractJSON(text);
+    } catch (e) {
+      console.warn("Price search JSON parsing failed", e);
+      data = {
+        prices: [],
+        overview: response.text || "Could not parse price data."
+      };
+    }
 
     // Extract grounding chunks (sources)
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
@@ -98,14 +208,16 @@ export const searchItemPrices = async (query: string, currency: string): Promise
       .map((web: any) => ({ title: web.title, uri: web.uri })) || [];
 
     return {
-      text: response.text || "No pricing data found.",
+      prices: data.prices || [],
+      overview: data.overview || "No details available.",
       sources: sources
     };
 
   } catch (error) {
     console.error("Gemini price search failed:", error);
     return {
-      text: "Could not fetch live prices at this time.",
+      prices: [],
+      overview: "Could not fetch live prices. Please check your API Key or network connection.",
       sources: []
     };
   }

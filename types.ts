@@ -14,18 +14,31 @@ export interface WebSource {
   uri: string;
 }
 
+export interface GameVersion {
+  region: string;
+  languages: string;
+  sourceUrl: string;
+}
+
 export interface ItemAnalysis {
   name: string;
   category: string;
   description: string;
   estimatedValue: string;
   searchTips: string[];
-  languages?: string;
+  versions: GameVersion[];
   sources?: WebSource[];
 }
 
+export interface PlatformPrice {
+  platform: string;
+  price: string;
+  status: string;
+}
+
 export interface PriceInsight {
-  text: string;
+  prices: PlatformPrice[];
+  overview: string;
   sources: WebSource[];
 }
 
