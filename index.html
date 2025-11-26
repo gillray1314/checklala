@@ -2,8 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PriceCompass - Multi-Market Search</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>PriceCompass</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Theme Color (Matches bg-gray-950) -->
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="background-color" content="#0f172a" />
+
+    <!-- iOS / Apple Mobile Web App Capable -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PriceCompass" />
+
+    <!-- Dynamic Favicon / Touch Icon (Inline SVG for immediate effect without file upload) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%234f46e5%22 /><circle cx=%2242%22 cy=%2242%22 r=%2225%22 fill=%22none%22 stroke=%22white%22 stroke-width=%228%22 /><line x1=%2260%22 y1=%2260%22 x2=%2285%22 y2=%2285%22 stroke=%22white%22 stroke-width=%228%22 stroke-linecap=%22round%22 /></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%234f46e5%22 /><circle cx=%2242%22 cy=%2242%22 r=%2225%22 fill=%22none%22 stroke=%22white%22 stroke-width=%228%22 /><line x1=%2260%22 y1=%2260%22 x2=%2285%22 y2=%2285%22 stroke=%22white%22 stroke-width=%228%22 stroke-linecap=%22round%22 /></svg>">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -27,6 +44,8 @@
       body {
         background-color: #0f172a;
         color: #f8fafc;
+        /* Prevent elastic scrolling on iOS for a more app-like feel */
+        overscroll-behavior-y: none; 
       }
       /* Custom scrollbar */
       ::-webkit-scrollbar {
@@ -43,15 +62,15 @@
         background: #64748b;
       }
     </style>
-  <script type="importmap">
+<script type="importmap">
 {
   "imports": {
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "vite": "https://aistudiocdn.com/vite@^7.2.4"
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
 }
 </script>
